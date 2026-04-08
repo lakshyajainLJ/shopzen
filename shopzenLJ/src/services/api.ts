@@ -2,7 +2,7 @@
 //  ShopZen API — connects to Flask backend at :5000
 // ─────────────────────────────────────────────────────────
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const BASE_URL = import.meta.env.VITE_API_URL || "https://shopzen-uov2.onrender.com";
 
 // Attach JWT token from localStorage to every request
 function authHeaders(): HeadersInit {
