@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: shopzen-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt gunicorn openai python-dotenv
+    startCommand: gunicorn -c gunicorn.conf.py app:app
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: shopzen
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: PORT
+        value: 5000
