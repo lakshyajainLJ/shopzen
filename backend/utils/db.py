@@ -2,6 +2,8 @@ import os
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from utils.logger import logger
 
+DEFAULT_ATLAS_URI = "mongodb+srv://lakshyajain579_db_user:VnbKFiLOc7KDFeQQ@cluster0.ys18qyh.mongodb.net/?retryWrites=true&w=majority"
+
 class Database:
     _client = None
     _db = None
@@ -9,14 +11,11 @@ class Database:
     @classmethod
     def get_db(cls):
         if cls._db is None:
-            mongo_uri = os.environ.get("MONGODB_URI")
+            mongo_uri = os.environ.get("MONGODB_URI", DEFAULT_ATLAS_URI)
             db_name = os.environ.get("MONGODB_DATABASE", "shopzen")
             
-            if not mongo_uri:
-                raise ValueError("MONGODB_URI environment variable is missing. Please set your MongoDB Atlas connection string.")
-
             logger.info(f"Connecting to MongoDB Atlas database: {db_name}")
-            cls._client = MongoClient(mongo_uri)
+            cls._client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
             cls._db = cls._client[db_name]
             
             # Ensure indexes on startup

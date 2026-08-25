@@ -3,8 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+DEFAULT_ATLAS_URI = "mongodb+srv://lakshyajain579_db_user:VnbKFiLOc7KDFeQQ@cluster0.ys18qyh.mongodb.net/?retryWrites=true&w=majority"
+
 class Config:
-    MONGO_URI = os.environ.get("MONGODB_URI")
+    MONGO_URI = os.environ.get("MONGODB_URI", DEFAULT_ATLAS_URI)
     MONGODB_DATABASE = os.environ.get("MONGODB_DATABASE", "shopzen")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "prod_super_secret_jwt_key_shopzen_2026_x938")
     FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
