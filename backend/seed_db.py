@@ -204,7 +204,7 @@ def seed_database():
     # 2. Seed Default Admin User if not exists
     admin_email = "admin@shopzen.com"
     if not db.users.find_one({"email": admin_email}):
-        hashed_pw = bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt())
+        hashed_pw = bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db.users.insert_one({
             "name": "ShopZen Admin",
             "email": admin_email,
@@ -212,12 +212,12 @@ def seed_database():
             "role": "admin",
             "created_at": datetime.utcnow()
         })
-        logger.info(f"✅ Default Admin created: {admin_email} / admin123")
+        logger.info(f"Default Admin created: {admin_email} / admin123")
 
     # 3. Seed Sample User if not exists
     user_email = "customer@shopzen.com"
     if not db.users.find_one({"email": user_email}):
-        hashed_pw = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt())
+        hashed_pw = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db.users.insert_one({
             "name": "Demo Customer",
             "email": user_email,
@@ -225,7 +225,7 @@ def seed_database():
             "role": "user",
             "created_at": datetime.utcnow()
         })
-        logger.info(f"✅ Demo Customer created: {user_email} / password123")
+        logger.info(f"Demo Customer created: {user_email} / password123")
 
 if __name__ == "__main__":
     seed_database()
