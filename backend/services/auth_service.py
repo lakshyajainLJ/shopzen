@@ -9,11 +9,9 @@ from utils.logger import logger
 def safe_hash_password(password: str) -> str:
     if not isinstance(password, str):
         password = str(password)
-    try:
-        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
-    except TypeError:
-        hashed = bcrypt.hashpw(password, bcrypt.gensalt())
-        
+    pw_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pw_bytes, salt)
     if isinstance(hashed, bytes):
         return hashed.decode("utf-8")
     return str(hashed)
@@ -21,16 +19,16 @@ def safe_hash_password(password: str) -> str:
 def safe_check_password(password: str, stored_hash) -> bool:
     if not isinstance(password, str):
         password = str(password)
-        
+    pw_bytes = password.encode("utf-8")
+    
     if isinstance(stored_hash, str):
         hash_bytes = stored_hash.encode("utf-8")
-    else:
+    elif isinstance(stored_hash, bytes):
         hash_bytes = stored_hash
+    else:
+        hash_bytes = str(stored_hash).encode("utf-8")
         
-    try:
-        return bcrypt.checkpw(password.encode("utf-8"), hash_bytes)
-    except TypeError:
-        return bcrypt.checkpw(password, hash_bytes)
+    return bcrypt.checkpw(pw_bytes, hash_bytes)
 
 class AuthService:
     @staticmethod
