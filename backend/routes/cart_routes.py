@@ -1,171 +1,65 @@
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from bson import ObjectId
+from services.cart_service import CartService
+from utils.response import success_response, error_response
 
 cart = Blueprint("cart", __name__)
 
-
-# =========================
-# ADD PRODUCT TO CART
-# =========================
-@cart.route("/cart/add", methods=["POST"])
-@jwt_required()
-def add_to_cart():
-    from app import mongo
-
-    user_id = get_jwt_identity()
-    data = request.json
-
-    if not data or "product_id" not in data:
-        return {"error": "product_id missing"}, 400
-
-    product_id = ObjectId(data["product_id"])
-
-    product = mongo.db.products.find_one({"_id": product_id})
-    if not product:
-        return {"error": "Product not found"}, 404
-
-    existing_cart = mongo.db.carts.find_one({"user_id": user_id})
-
-    if existing_cart:
-        # Check if product already exists
-        for item in existing_cart.get("items", []):
-            if str(item["product_id"]) == str(product_id):
-                mongo.db.carts.update_one(
-                    {"user_id": user_id, "items.product_id": product_id},
-                    {"$inc": {"items.$.quantity": 1}}
-                )
-                break
-        else:
-            mongo.db.carts.update_one(
-                {"user_id": user_id},
-                {
-                    "$push": {
-                        "items": {
-                            "product_id": product_id,
-                            "title": product.get("title"),
-                            "price": product.get("price"),
-                            "quantity": 1,
-                            "image": product.get("image")
-                        }
-                    }
-                }
-            )
-    else:
-        mongo.db.carts.insert_one({
-            "user_id": user_id,
-            "items": [
-                {
-                    "product_id": product_id,
-                    "title": product.get("title"),
-                    "price": product.get("price"),
-                    "quantity": 1,
-                    "image": product.get("image")
-                }
-            ]
-        })
-
-    return {"message": "Product added to cart"}, 200
-
-
-# =========================
-# VIEW CART
-# =========================
 @cart.route("/cart", methods=["GET"])
 @jwt_required()
 def view_cart():
-    from app import mongo
-
     user_id = get_jwt_identity()
-    cart_data = mongo.db.carts.find_one({"user_id": user_id})
+    res = CartService.get_cart(user_id)
+    return success_response(data=res)
 
-    if not cart_data:
-        return {"items": [], "total_price": 0}, 200
+@cart.route("/cart/add", methods=["POST"])
+@jwt_required()
+def add_to_cart():
+    user_id = get_jwt_identity()
+    data = request.json or {}
+    product_id = data.get("product_id")
+    quantity = int(data.get("quantity", 1))
 
-    items = []
-    total_price = 0
+    if not product_id:
+        return error_response(code="VALIDATION_ERROR", message="product_id is required", status_code=400)
 
-    for item in cart_data.get("items", []):
-        subtotal = item["price"] * item["quantity"]
-        total_price += subtotal
+    res = CartService.add_to_cart(user_id, product_id, quantity)
+    if "error" in res:
+        return error_response(code=res["code"], message=res["error"], status_code=res["status"])
+    return success_response(data=res, message="Item added to cart")
 
-        items.append({
-            "product_id": str(item["product_id"]),
-            "title": item["title"],
-            "price": item["price"],
-            "quantity": item["quantity"],
-            "image": item.get("image"),
-            "subtotal": subtotal
-        })
-
-    return {
-        "items": items,
-        "total_price": total_price
-    }, 200
-
-
-# =========================
-# UPDATE QUANTITY
-# =========================
 @cart.route("/cart/update", methods=["PUT"])
 @jwt_required()
-def update_cart_quantity():
-    from app import mongo
-
+def update_cart():
     user_id = get_jwt_identity()
-    data = request.json
+    data = request.json or {}
+    product_id = data.get("product_id")
+    quantity = data.get("quantity")
 
-    if not data or "product_id" not in data or "quantity" not in data:
-        return {"error": "Invalid data"}, 400
+    if not product_id or quantity is None:
+        return error_response(code="VALIDATION_ERROR", message="product_id and quantity are required", status_code=400)
 
-    product_id = ObjectId(data["product_id"])
-    quantity = data["quantity"]
+    res = CartService.update_quantity(user_id, product_id, int(quantity))
+    if "error" in res:
+        return error_response(code=res["code"], message=res["error"], status_code=res["status"])
+    return success_response(data=res, message="Cart updated")
 
-    if quantity < 1:
-        return {"error": "Quantity must be at least 1"}, 400
-
-    mongo.db.carts.update_one(
-        {"user_id": user_id, "items.product_id": product_id},
-        {"$set": {"items.$.quantity": quantity}}
-    )
-
-    return {"message": "Quantity updated"}, 200
-
-
-# =========================
-# REMOVE ITEM
-# =========================
 @cart.route("/cart/remove", methods=["DELETE"])
 @jwt_required()
 def remove_from_cart():
-    from app import mongo
-
     user_id = get_jwt_identity()
-    data = request.json
+    data = request.json or {}
+    product_id = data.get("product_id")
 
-    if not data or "product_id" not in data:
-        return {"error": "product_id missing"}, 400
+    if not product_id:
+        return error_response(code="VALIDATION_ERROR", message="product_id is required", status_code=400)
 
-    product_id = ObjectId(data["product_id"])
+    res = CartService.remove_from_cart(user_id, product_id)
+    return success_response(data=res, message="Item removed from cart")
 
-    mongo.db.carts.update_one(
-        {"user_id": user_id},
-        {"$pull": {"items": {"product_id": product_id}}}
-    )
-
-    return {"message": "Item removed"}, 200
-
-
-# =========================
-# CLEAR CART
-# =========================
 @cart.route("/cart/clear", methods=["DELETE"])
 @jwt_required()
 def clear_cart():
-    from app import mongo
-
     user_id = get_jwt_identity()
-
-    mongo.db.carts.delete_one({"user_id": user_id})
-
-    return {"message": "Cart cleared"}, 200
+    res = CartService.clear_cart(user_id)
+    return success_response(data=res, message="Cart cleared")

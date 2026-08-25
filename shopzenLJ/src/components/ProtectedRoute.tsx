@@ -8,7 +8,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export function AdminRoute({ children }: { children: React.ReactNode }) {
-  const isAdmin = sessionStorage.getItem("shopzen_admin") === "true";
-  if (!isAdmin) return <Navigate to="/admin/login" replace />;
+  const { isAuthenticated, isAdmin } = useAuth();
+  if (!isAuthenticated || !isAdmin) return <Navigate to="/admin/login" replace />;
   return <>{children}</>;
 }

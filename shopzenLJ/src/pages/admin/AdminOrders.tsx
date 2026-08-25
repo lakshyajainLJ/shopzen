@@ -1,34 +1,36 @@
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp, IndianRupee, MapPin, User } from "lucide-react";
+import { ChevronDown, ChevronUp, IndianRupee, MapPin, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { apiAdminOrders } from "@/services/api";
+import { apiAdminOrders, apiAdminUpdateOrderStatus } from "@/services/api";
 import { toast } from "sonner";
+import { Order } from "@/types";
 
-const ORDER_STATUSES = ["pending","processing","packed","shipped","out","delivered"] as const;
+const ORDER_STATUSES = ["pending", "processing", "packed", "shipped", "out", "delivered"] as const;
 const STATUS_LABELS: Record<string, string> = {
-  pending:"Pending", processing:"Confirmed", packed:"Packed",
-  shipped:"Shipped", out:"Out for Delivery", delivered:"Delivered",
+  pending: "Pending", processing: "Confirmed", packed: "Packed",
+  shipped: "Shipped", out: "Out for Delivery", delivered: "Delivered",
+  PLACED: "Order Placed"
 };
 
 function MiniTracker({ status }: { status: string }) {
-  const idx = ORDER_STATUSES.indexOf(status as any);
+  const normalizedStatus = status === "PLACED" ? "pending" : status.toLowerCase();
+  const idx = ORDER_STATUSES.indexOf(normalizedStatus as any);
   return (
     <div className="flex items-center justify-between my-3">
       {ORDER_STATUSES.map((s, i) => (
         <div key={s} className="flex items-center flex-1 last:flex-initial">
           <div className="flex flex-col items-center">
-            <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold
-              ${i < idx ? "bg-green-500 text-white"
-                : i === idx ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground"}`}>
+            <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+              i < idx ? "bg-green-500 text-white" : i === idx ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+            }`}>
               {i < idx ? "✓" : i + 1}
             </div>
-            <span className={`text-[9px] mt-0.5 text-center hidden sm:block leading-tight max-w-[52px]
-              ${i <= idx ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+            <span className={`text-[9px] mt-0.5 text-center hidden sm:block leading-tight max-w-[52px] ${
+              i <= idx ? "text-foreground font-medium" : "text-muted-foreground"
+            }`}>
               {STATUS_LABELS[s]}
             </span>
           </div>
@@ -42,10 +44,10 @@ function MiniTracker({ status }: { status: string }) {
 }
 
 export default function AdminOrders() {
-  const [orders,   setOrders]   = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
-  const [loading,  setLoading]  = useState(true);
-  const [filter,   setFilter]   = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,21 +55,30 @@ export default function AdminOrders() {
       .then((data) => {
         setOrders(data);
         const s: Record<string, string> = {};
-        data.forEach((o: any, i: number) => { s[o._id || i] = o.status || "pending"; });
+        data.forEach((o, i) => { s[o.id || String(i)] = o.order_status || o.status || "pending"; });
         setStatuses(s);
       })
       .catch(() => toast.error("Failed to load orders"))
       .finally(() => setLoading(false));
   }, []);
 
-  const updateStatus = (oid: string, val: string) => {
-    setStatuses((prev) => ({ ...prev, [oid]: val }));
-    // Note: to persist this, add PUT /admin/orders/:id endpoint to Flask backend
-    toast.success(`Status updated to "${STATUS_LABELS[val]}"`);
+  const updateStatus = async (oid: string, val: string) => {
+    try {
+      await apiAdminUpdateOrderStatus(oid, val);
+      setStatuses((prev) => ({ ...prev, [oid]: val }));
+      toast.success(`Status updated to "${STATUS_LABELS[val] || val}"`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update order status");
+    }
   };
 
-  const totalRevenue = orders.reduce((s, o) => s + (o.total_price || 0), 0);
-  const filtered = filter === "all" ? orders : orders.filter((o, i) => (statuses[o._id || i] || "pending") === filter);
+  const totalRevenue = orders.reduce((s, o) => s + (o.total || o.total_price || 0), 0);
+  const filtered = filter === "all"
+    ? orders
+    : orders.filter((o, i) => {
+        const current = (statuses[o.id || String(i)] || "pending").toLowerCase();
+        return current === filter.toLowerCase();
+      });
 
   return (
     <div className="space-y-6">
@@ -81,35 +92,44 @@ export default function AdminOrders() {
       {/* Filter tabs */}
       <div className="flex flex-wrap gap-2">
         {["all", ...ORDER_STATUSES].map((f) => (
-          <Button key={f} variant={filter === f ? "default" : "outline"} size="sm"
-            onClick={() => setFilter(f)} className="capitalize">
-            {f === "all" ? "All" : STATUS_LABELS[f]}
+          <Button
+            key={f}
+            variant={filter === f ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFilter(f)}
+            className="capitalize"
+          >
+            {f === "all" ? "All" : STATUS_LABELS[f] || f}
           </Button>
         ))}
       </div>
 
       {loading ? (
         <div className="space-y-3">
-          {[1,2,3].map(i=><Skeleton key={i} className="h-16 w-full rounded-lg"/>)}
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-center text-muted-foreground py-12">No orders found.</p>
       ) : (
         <div className="space-y-3">
           {filtered.map((o, i) => {
-            const oid    = o._id || String(i);
-            const status = statuses[oid] || "pending";
+            const oid = o.id || String(i);
+            const status = statuses[oid] || o.order_status || o.status || "pending";
             const isOpen = expanded === oid;
-            const date   = o.created_at
-              ? new Date(o.created_at).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })
+            const date = o.created_at
+              ? new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
               : "—";
+
+            const address = o.shipping_address || o.address;
 
             return (
               <Card key={oid} className="overflow-hidden">
                 {/* Header */}
                 <div className="p-4 flex items-center justify-between gap-3 flex-wrap">
-                  <button className="flex items-center gap-3 text-left flex-1 min-w-0"
-                    onClick={() => setExpanded(isOpen ? null : oid)}>
+                  <button
+                    className="flex items-center gap-3 text-left flex-1 min-w-0"
+                    onClick={() => setExpanded(isOpen ? null : oid)}
+                  >
                     <div>
                       <p className="font-mono font-bold text-sm">#{oid.slice(-8).toUpperCase()}</p>
                       <p className="text-xs text-muted-foreground">{date} · {o.items?.length || 0} item(s)</p>
@@ -119,7 +139,7 @@ export default function AdminOrders() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {(o.user_name || o.user_email) && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1 bg-muted px-2 py-1 rounded-full">
-                        <User className="h-3 w-3" /> {o.user_name || o.user_email}
+                        <UserIcon className="h-3 w-3" /> {o.user_name || o.user_email}
                       </span>
                     )}
 
@@ -135,9 +155,7 @@ export default function AdminOrders() {
                       </SelectContent>
                     </Select>
 
-                    {o.total_price && (
-                      <span className="font-bold text-sm">₹{o.total_price.toLocaleString()}</span>
-                    )}
+                    <span className="font-bold text-sm">₹{(o.total || o.total_price || 0).toLocaleString()}</span>
                     <button onClick={() => setExpanded(isOpen ? null : oid)}>
                       {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </button>
@@ -149,23 +167,22 @@ export default function AdminOrders() {
                   <div className="border-t p-4 space-y-4">
                     <MiniTracker status={status} />
 
-                    {/* Customer + Address */}
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="bg-muted rounded-lg p-3">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
-                          <User className="h-3 w-3" /> Customer
+                          <UserIcon className="h-3 w-3" /> Customer
                         </p>
                         <p className="text-sm font-medium">{o.user_name || "—"}</p>
                         <p className="text-xs text-muted-foreground">{o.user_email || "—"}</p>
                       </div>
-                      {o.address && (
+                      {address && (
                         <div className="bg-muted rounded-lg p-3">
                           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1">
                             <MapPin className="h-3 w-3" /> Delivery Address
                           </p>
-                          {o.address.name && <p className="text-sm font-medium">{o.address.name} · {o.address.phone}</p>}
+                          {address.name && <p className="text-sm font-medium">{address.name} · {address.phone}</p>}
                           <p className="text-xs text-muted-foreground">
-                            {o.address.line1}{o.address.line2?`, ${o.address.line2}`:""}, {o.address.city}, {o.address.state} — {o.address.pincode}
+                            {address.line1}{address.line2 ? `, ${address.line2}` : ""}, {address.city}, {address.state} — {address.pincode}
                           </p>
                         </div>
                       )}
@@ -173,18 +190,25 @@ export default function AdminOrders() {
 
                     {/* Items */}
                     <div className="space-y-2">
-                      {(o.items || []).map((item: any, j: number) => (
-                        <div key={j} className="flex items-center gap-3 py-2 border-b last:border-0">
-                          <img src={item.image || `https://picsum.photos/seed/${j+5}/40/40`}
-                            className="h-10 w-10 rounded object-cover" alt=""
-                            onError={(e)=>{(e.target as HTMLImageElement).src=`https://picsum.photos/seed/${j+5}/40/40`;}}/>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium line-clamp-1">{item.title || item.name}</p>
-                            <p className="text-xs text-muted-foreground">Qty: {item.quantity} · ₹{item.price?.toLocaleString()} each</p>
+                      {(o.items || []).map((item, j) => {
+                        const title = item.name_snapshot || (item as any).title || (item as any).name || "Item";
+                        const price = item.price_snapshot || (item as any).price || 0;
+                        return (
+                          <div key={j} className="flex items-center gap-3 py-2 border-b last:border-0">
+                            <img
+                              src={item.image || `https://picsum.photos/seed/${j + 5}/40/40`}
+                              className="h-10 w-10 rounded object-cover"
+                              alt=""
+                              onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${j + 5}/40/40`; }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium line-clamp-1">{title}</p>
+                              <p className="text-xs text-muted-foreground">Qty: {item.quantity} · ₹{price.toLocaleString()} each</p>
+                            </div>
+                            <p className="text-sm font-bold">₹{(price * item.quantity).toLocaleString()}</p>
                           </div>
-                          <p className="text-sm font-bold">₹{(item.price * item.quantity).toLocaleString()}</p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {o.payment_method && (

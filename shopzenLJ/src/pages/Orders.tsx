@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, Package } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,29 +8,34 @@ import { Footer } from "@/components/Footer";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { apiGetOrders } from "@/services/api";
+import { Order } from "@/types";
 
 const ORDER_STATUSES = ["pending", "processing", "packed", "shipped", "out", "delivered"] as const;
 const STATUS_LABELS: Record<string, string> = {
   pending: "Order Placed", processing: "Confirmed",
   packed: "Packed", shipped: "Shipped",
   out: "Out for Delivery", delivered: "Delivered",
+  PLACED: "Order Placed"
 };
 
 function DeliveryTracker({ status }: { status: string }) {
-  const currentIdx = ORDER_STATUSES.indexOf(status as any);
+  const normalizedStatus = status === "PLACED" ? "pending" : status.toLowerCase();
+  const currentIdx = ORDER_STATUSES.indexOf(normalizedStatus as any);
   return (
     <div className="flex items-center justify-between my-4">
       {ORDER_STATUSES.map((s, i) => (
         <div key={s} className="flex items-center flex-1 last:flex-initial">
           <div className="flex flex-col items-center">
-            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold
-              ${i < currentIdx ? "bg-green-500 text-white"
+            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold ${
+              i < currentIdx ? "bg-green-500 text-white"
                 : i === currentIdx ? "bg-primary text-primary-foreground ring-4 ring-primary/20"
-                : "bg-muted text-muted-foreground"}`}>
+                : "bg-muted text-muted-foreground"
+            }`}>
               {i < currentIdx ? "✓" : i + 1}
             </div>
-            <span className={`text-[10px] mt-1 text-center hidden sm:block max-w-[56px] leading-tight
-              ${i <= currentIdx ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+            <span className={`text-[10px] mt-1 text-center hidden sm:block max-w-[56px] leading-tight ${
+              i <= currentIdx ? "text-foreground font-medium" : "text-muted-foreground"
+            }`}>
               {STATUS_LABELS[s]}
             </span>
           </div>
@@ -46,13 +49,13 @@ function DeliveryTracker({ status }: { status: string }) {
 }
 
 export default function Orders() {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     apiGetOrders()
-      .then((data) => setOrders([...data].reverse()))
+      .then((data) => setOrders(data))
       .catch(() => setOrders([]))
       .finally(() => setLoading(false));
   }, []);
@@ -74,9 +77,13 @@ export default function Orders() {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="flex-1 container py-8">
-        <EmptyState icon={Package} title="No orders yet"
+        <EmptyState
+          icon={Package}
+          title="No orders yet"
           subtitle="Start shopping and your orders will appear here"
-          actionLabel="Shop Now" actionHref="/products" />
+          actionLabel="Shop Now"
+          actionHref="/products"
+        />
       </main>
       <Footer />
     </div>
@@ -89,17 +96,21 @@ export default function Orders() {
         <PageHeader title="My Orders" subtitle={`${orders.length} order(s)`} />
         <div className="space-y-4 max-w-3xl">
           {orders.map((order, idx) => {
-            const oid    = order._id || order.id || String(idx);
-            const status = order.status || "pending";
-            const date   = order.created_at
+            const oid = order.id || String(idx);
+            const status = order.order_status || order.status || "pending";
+            const date = order.created_at
               ? new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
               : "—";
             const isOpen = expanded === oid;
+            const address = order.shipping_address || order.address;
+            const orderTotal = order.total || order.total_price || order.subtotal || 0;
 
             return (
               <Card key={oid} className="overflow-hidden">
-                <button className="w-full p-4 flex items-center justify-between text-left"
-                  onClick={() => setExpanded(isOpen ? null : oid)}>
+                <button
+                  className="w-full p-4 flex items-center justify-between text-left"
+                  onClick={() => setExpanded(isOpen ? null : oid)}
+                >
                   <div className="flex items-center gap-4">
                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
                       <Package className="h-5 w-5 text-primary" />
@@ -110,12 +121,10 @@ export default function Orders() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge variant={status === "delivered" ? "default" : "secondary"} className="capitalize">
+                    <Badge variant={status.toLowerCase() === "delivered" ? "default" : "secondary"} className="capitalize">
                       {STATUS_LABELS[status] || status}
                     </Badge>
-                    {order.total_price && (
-                      <span className="font-bold text-sm">₹{order.total_price.toLocaleString()}</span>
-                    )}
+                    <span className="font-bold text-sm">₹{orderTotal.toLocaleString()}</span>
                     {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </div>
                 </button>
@@ -126,45 +135,47 @@ export default function Orders() {
                     <DeliveryTracker status={status} />
 
                     {/* Address */}
-                    {order.address && (
+                    {address && (
                       <div className="bg-muted rounded-lg p-3">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Delivery Address</p>
-                        {order.address.name && (
-                          <p className="text-sm font-medium">{order.address.name} · {order.address.phone}</p>
+                        {address.name && (
+                          <p className="text-sm font-medium">{address.name} · {address.phone}</p>
                         )}
                         <p className="text-sm text-muted-foreground">
-                          {order.address.line1}{order.address.line2 ? `, ${order.address.line2}` : ""},{" "}
-                          {order.address.city}, {order.address.state} — {order.address.pincode}
+                          {address.line1}{address.line2 ? `, ${address.line2}` : ""},{" "}
+                          {address.city}, {address.state} — {address.pincode}
                         </p>
                       </div>
                     )}
 
                     {/* Items */}
                     <div className="space-y-3">
-                      {(order.items || []).map((item: any, i: number) => (
-                        <div key={i} className="flex items-center gap-3">
-                          <img
-                            src={item.image || `https://picsum.photos/seed/${i + 10}/48/48`}
-                            alt={item.title || item.name}
-                            className="h-12 w-12 rounded-md object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${i + 10}/48/48`; }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium line-clamp-1">{item.title || item.name}</p>
-                            <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                      {(order.items || []).map((item, i) => {
+                        const title = item.name_snapshot || (item as any).title || (item as any).name || "Item";
+                        const price = item.price_snapshot || (item as any).price || 0;
+                        return (
+                          <div key={i} className="flex items-center gap-3">
+                            <img
+                              src={item.image || `https://picsum.photos/seed/${i + 10}/48/48`}
+                              alt={title}
+                              className="h-12 w-12 rounded-md object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${i + 10}/48/48`; }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium line-clamp-1">{title}</p>
+                              <p className="text-xs text-muted-foreground">Qty: {item.quantity} · ₹{price.toLocaleString()} each</p>
+                            </div>
+                            <p className="text-sm font-bold">₹{(price * item.quantity).toLocaleString()}</p>
                           </div>
-                          <p className="text-sm font-bold">₹{(item.price * item.quantity).toLocaleString()}</p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className="flex justify-between items-center pt-2 border-t text-sm">
                       {order.payment_method && (
                         <span className="text-muted-foreground">Payment: {order.payment_method}</span>
                       )}
-                      {order.total_price && (
-                        <span className="font-bold">Total: ₹{order.total_price.toLocaleString()}</span>
-                      )}
+                      <span className="font-bold">Total: ₹{orderTotal.toLocaleString()}</span>
                     </div>
                   </div>
                 )}

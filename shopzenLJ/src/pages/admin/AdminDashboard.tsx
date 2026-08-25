@@ -6,36 +6,44 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiGetProducts, apiAdminOrders, apiAdminUsers } from "@/services/api";
+import { Product, Order, User } from "@/types";
 
 const STATUS_LABELS: Record<string, string> = {
-  pending:"Pending", processing:"Confirmed", packed:"Packed",
-  shipped:"Shipped", out:"Out for Delivery", delivered:"Delivered",
+  pending: "Pending", processing: "Confirmed", packed: "Packed",
+  shipped: "Shipped", out: "Out for Delivery", delivered: "Delivered",
+  PLACED: "Order Placed"
 };
 
 export default function AdminDashboard() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [orders,   setOrders]   = useState<any[]>([]);
-  const [users,    setUsers]    = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.allSettled([apiGetProducts(), apiAdminOrders(), apiAdminUsers()])
+    Promise.allSettled([apiGetProducts(1, 100), apiAdminOrders(), apiAdminUsers()])
       .then(([p, o, u]) => {
-        if (p.status === "fulfilled") setProducts(p.value);
+        if (p.status === "fulfilled") {
+          const val: any = p.value;
+          setProducts(Array.isArray(val) ? val : val.products || []);
+        }
         if (o.status === "fulfilled") setOrders(o.value);
         if (u.status === "fulfilled") setUsers(u.value);
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const totalRevenue  = orders.reduce((s, o) => s + (o.total_price || 0), 0);
-  const pendingOrders = orders.filter((o) => (o.status || "pending") === "pending");
+  const totalRevenue = orders.reduce((s, o) => s + (o.total || o.total_price || 0), 0);
+  const pendingOrders = orders.filter((o) => {
+    const st = (o.order_status || o.status || "pending").toLowerCase();
+    return st === "pending" || st === "placed";
+  });
 
   const stats = [
-    { label:"Total Products", value: products.length,                              icon:Package,      link:"/admin/products", color:"text-blue-500" },
-    { label:"Total Orders",   value: orders.length,                                icon:ShoppingCart, link:"/admin/orders",   color:"text-green-500" },
-    { label:"Total Revenue",  value:`₹${totalRevenue.toLocaleString("en-IN")}`,   icon:IndianRupee,  link:"/admin/orders",   color:"text-yellow-500" },
-    { label:"Registered Users",value:users.length,                                icon:Users,        link:"/admin/users",    color:"text-purple-500" },
+    { label: "Total Products", value: products.length, icon: Package, link: "/admin/products", color: "text-blue-500" },
+    { label: "Total Orders", value: orders.length, icon: ShoppingCart, link: "/admin/orders", color: "text-green-500" },
+    { label: "Total Revenue", value: `₹${totalRevenue.toLocaleString("en-IN")}`, icon: IndianRupee, link: "/admin/orders", color: "text-yellow-500" },
+    { label: "Registered Users", value: users.length, icon: Users, link: "/admin/users", color: "text-purple-500" },
   ];
 
   return (
@@ -43,7 +51,7 @@ export default function AdminDashboard() {
       <div>
         <h1 className="font-display text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground text-sm">
-          {new Date().toLocaleDateString("en-IN", { weekday:"long", day:"numeric", month:"long", year:"numeric" })}
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </p>
       </div>
 
@@ -67,10 +75,11 @@ export default function AdminDashboard() {
                 <s.icon className={`h-5 w-5 ${s.color}`} />
                 <TrendingUp className="h-3 w-3 text-muted-foreground" />
               </div>
-              {loading
-                ? <Skeleton className="h-7 w-20 mb-1" />
-                : <p className="text-2xl font-bold">{s.value}</p>
-              }
+              {loading ? (
+                <Skeleton className="h-7 w-20 mb-1" />
+              ) : (
+                <p className="text-2xl font-bold">{s.value}</p>
+              )}
               <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
             </Card>
           </Link>
@@ -95,25 +104,30 @@ export default function AdminDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading
-                ? [1,2,3].map(i=>(
-                    <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-4 w-full"/></TableCell></TableRow>
-                  ))
-                : orders.length === 0
-                  ? <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground text-sm py-4">No orders yet</TableCell></TableRow>
-                  : orders.slice(0, 6).map((o, i) => (
-                    <TableRow key={o._id || i}>
-                      <TableCell className="font-medium text-xs font-mono">#{String(o._id||i+1).slice(-6).toUpperCase()}</TableCell>
+              {loading ? (
+                [1, 2, 3].map((i) => (
+                  <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-4 w-full" /></TableCell></TableRow>
+                ))
+              ) : orders.length === 0 ? (
+                <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground text-sm py-4">No orders yet</TableCell></TableRow>
+              ) : (
+                orders.slice(0, 6).map((o, i) => {
+                  const oid = o.id || String(i + 1);
+                  const st = o.order_status || o.status || "pending";
+                  return (
+                    <TableRow key={oid}>
+                      <TableCell className="font-medium text-xs font-mono">#{oid.slice(-6).toUpperCase()}</TableCell>
                       <TableCell className="text-xs">{o.user_name || o.user_email || "—"}</TableCell>
-                      <TableCell className="text-xs font-bold">₹{(o.total_price||0).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs font-bold">₹{(o.total || o.total_price || 0).toLocaleString()}</TableCell>
                       <TableCell>
-                        <Badge variant={o.status==="delivered"?"default":"secondary"} className="text-xs capitalize">
-                          {STATUS_LABELS[o.status] || o.status}
+                        <Badge variant={st.toLowerCase() === "delivered" ? "default" : "secondary"} className="text-xs capitalize">
+                          {STATUS_LABELS[st] || st}
                         </Badge>
                       </TableCell>
                     </TableRow>
-                  ))
-              }
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </Card>
@@ -132,26 +146,30 @@ export default function AdminDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading
-                ? [1,2,3].map(i=>(
-                    <TableRow key={i}><TableCell colSpan={2}><Skeleton className="h-4 w-full"/></TableCell></TableRow>
-                  ))
-                : products.length === 0
-                  ? <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground text-sm py-4">No products yet</TableCell></TableRow>
-                  : products.slice(0, 6).map((p) => (
-                    <TableRow key={p._id || p.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <img src={p.image || `https://picsum.photos/seed/${p._id}/36/36`} alt={p.name}
-                            className="h-8 w-8 rounded object-cover"
-                            onError={(e)=>{(e.target as HTMLImageElement).style.display="none";}}/>
-                          <span className="text-xs font-medium line-clamp-1">{p.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs font-bold">₹{p.price?.toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))
-              }
+              {loading ? (
+                [1, 2, 3].map((i) => (
+                  <TableRow key={i}><TableCell colSpan={2}><Skeleton className="h-4 w-full" /></TableCell></TableRow>
+                ))
+              ) : products.length === 0 ? (
+                <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground text-sm py-4">No products yet</TableCell></TableRow>
+              ) : (
+                products.slice(0, 6).map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={p.image || `https://picsum.photos/seed/${p.id}/36/36`}
+                          alt={p.name}
+                          className="h-8 w-8 rounded object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <span className="text-xs font-medium line-clamp-1">{p.name || p.title}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs font-bold">₹{p.price?.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </Card>

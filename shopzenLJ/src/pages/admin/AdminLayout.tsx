@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, Package, ShoppingCart, Users, ExternalLink, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
   { title: "Dashboard", path: "/admin", icon: LayoutDashboard },
@@ -12,9 +12,10 @@ const navItems = [
 export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    sessionStorage.removeItem("shopzen_admin");
+    logout();
     navigate("/admin/login");
   };
 
@@ -30,8 +31,15 @@ export default function AdminLayout() {
           {navItems.map((item) => {
             const active = location.pathname === item.path;
             return (
-              <Link key={item.path} to={item.path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"}`}>
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+                }`}
+              >
                 <item.icon className="h-4 w-4" />
                 {item.title}
               </Link>
@@ -39,12 +47,18 @@ export default function AdminLayout() {
           })}
         </nav>
         <div className="p-3 space-y-1 border-t border-sidebar-border">
-          <a href="/" target="_blank" rel="noreferrer"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50">
+          <a
+            href="/"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+          >
             <ExternalLink className="h-4 w-4" /> View Store
           </a>
-          <button onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50 w-full">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50 w-full"
+          >
             <LogOut className="h-4 w-4" /> Logout
           </button>
         </div>

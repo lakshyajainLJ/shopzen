@@ -7,6 +7,7 @@ import { CartProvider } from "@/context/CartContext";
 import { WishlistProvider } from "@/context/WishlistContext";
 import { ProtectedRoute, AdminRoute } from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
+import { AIAssistant } from "@/components/AIAssistant";
 
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -37,6 +38,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <ScrollToTop />
+              <AIAssistant />
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/login" element={<Login />} />

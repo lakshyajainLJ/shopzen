@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/shopzen
+      - MONGODB_DATABASE=shopzen
+      - JWT_SECRET_KEY=prod_super_secret_jwt_key_shopzen_2026_x938
+      - FRONTEND_URL=http://localhost:5173
+      - PORT=5000
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

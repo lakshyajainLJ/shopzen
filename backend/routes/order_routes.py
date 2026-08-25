@@ -1,63 +1,24 @@
-from flask import Blueprint
+from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime
+from services.order_service import OrderService
+from utils.response import success_response, error_response
 
 order = Blueprint("order", __name__)
 
-
-# =========================
-# PLACE ORDER
-# =========================
 @order.route("/orders/place", methods=["POST"])
 @jwt_required()
 def place_order():
-    from app import mongo
-
     user_id = get_jwt_identity()
+    data = request.json or {}
+    
+    res = OrderService.place_order(user_id, data)
+    if "error" in res:
+        return error_response(code=res["code"], message=res["error"], status_code=res["status"])
+    return success_response(data=res, message="Order placed successfully", status_code=201)
 
-    # FIXED HERE
-    cart = mongo.db.carts.find_one({"user_id": user_id})
-
-    if not cart or not cart.get("items"):
-        return {"error": "Cart is empty"}, 400
-
-    total_amount = sum(
-        item["price"] * item["quantity"] for item in cart["items"]
-    )
-
-    order_data = {
-        "user_id": user_id,
-        "items": cart["items"],
-        "total_amount": total_amount,
-        "status": "PLACED",
-        "created_at": datetime.utcnow()
-    }
-
-    mongo.db.orders.insert_one(order_data)
-
-    # FIXED HERE
-    mongo.db.carts.delete_one({"user_id": user_id})
-
-    return {
-        "message": "Order placed successfully",
-        "total_amount": total_amount
-    }
-# =========================
-# VIEW USER ORDERS
-# =========================
 @order.route("/orders", methods=["GET"])
 @jwt_required()
-def get_my_orders():
-    from app import mongo
-
+def get_orders():
     user_id = get_jwt_identity()
-
-    orders = list(
-        mongo.db.orders.find({"user_id": user_id})
-        .sort("created_at", -1)
-    )
-
-    for order_item in orders:
-        order_item["_id"] = str(order_item["_id"])
-
-    return orders
+    orders = OrderService.get_user_orders(user_id)
+    return success_response(data=orders)

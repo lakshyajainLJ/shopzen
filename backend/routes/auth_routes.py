@@ -1,81 +1,48 @@
 from flask import Blueprint, request
-from flask_jwt_extended import create_access_token
-import bcrypt
-from bson import ObjectId
-
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from services.auth_service import AuthService
+from utils.response import success_response, error_response
 
 auth = Blueprint("auth", __name__)
 
 @auth.route("/register", methods=["POST"])
 def register():
-    from app import mongo
+    data = request.json or {}
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
 
-    data = request.json
+    if not name or not email or not password:
+        return error_response(code="VALIDATION_ERROR", message="Name, email, and password are required", status_code=400)
 
-    # Check if user already exists
-    if mongo.db.users.find_one({"email": data["email"]}):
-        return {"error": "User already exists"}, 400
+    res = AuthService.register_user(name, email, password)
+    if "error" in res:
+        return error_response(code=res["code"], message=res["error"], status_code=res["status"])
 
-    # Hash password
-    hashed_pw = bcrypt.hashpw(
-        data["password"].encode("utf-8"),
-        bcrypt.gensalt()
-    )
-
-    # Insert user into DB
-    mongo.db.users.insert_one({
-    "name": data["name"],
-    "email": data["email"],
-    "password": hashed_pw,
-    "role": data.get("role", "user")   # ← add this line
-})
-
-    return {"message": "User registered successfully"}
-
+    return success_response(data=res, message="User registered successfully", status_code=201)
 
 @auth.route("/login", methods=["POST"])
 def login():
-    from app import mongo
-    data = request.json
+    data = request.json or {}
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
 
-    user = mongo.db.users.find_one({"email": data["email"]})
+    if not email or not password:
+        return error_response(code="VALIDATION_ERROR", message="Email and password are required", status_code=400)
 
-    if not user:
-        return {"error": "Invalid email or password"}, 401
+    res = AuthService.login_user(email, password)
+    if "error" in res:
+        return error_response(code=res["code"], message=res["error"], status_code=res["status"])
 
-    # Check password
-    if not bcrypt.checkpw(
-        data["password"].encode("utf-8"),
-        user["password"]
-    ):
-        return {"error": "Invalid email or password"}, 401
-
-    # Create JWT token
-    access_token = create_access_token(
-    identity=
-    str(user["_id"]),
-    additional_claims={"role": user.get("role", "user")}
-)
-
-    return {
-        "message": "Login successful",
-        "token": access_token
-    }
-
-from flask_jwt_extended import jwt_required, get_jwt_identity
+    return success_response(data=res, message="Login successful")
 
 @auth.route("/profile", methods=["GET"])
+@auth.route("/me", methods=["GET"])
 @jwt_required()
 def profile():
-    from app import mongo
-
     user_id = get_jwt_identity()
-    user = mongo.db.users.find_one({"_id": ObjectId(user_id)})
+    user = AuthService.get_user_profile(user_id)
+    if "error" in user:
+        return error_response(code=user["code"], message=user["error"], status_code=user["status"])
 
-    if not user:
-        return {"error": "User not found"}, 404
-
-    return {
-        "name": user["name"],
-        "email": user["email"]
-    }
+    return success_response(data=user)

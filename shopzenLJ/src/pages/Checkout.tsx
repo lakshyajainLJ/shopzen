@@ -12,6 +12,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { apiPlaceOrder } from "@/services/api";
 import { toast } from "sonner";
+import { ShippingAddress } from "@/types";
 
 const steps = ["Address", "Payment", "Review"];
 const addressTypes = [
@@ -26,12 +27,6 @@ const paymentMethods = [
   { value: "Net Banking",      icon: Building2 },
 ];
 
-interface Address {
-  type: "home" | "work" | "other";
-  name: string; phone: string; line1: string;
-  line2: string; city: string; state: string; pincode: string;
-}
-
 export default function Checkout() {
   const { items, totalPrice, clearCart } = useCart();
   const { user } = useAuth();
@@ -41,12 +36,14 @@ export default function Checkout() {
   const [success, setSuccess] = useState(false);
 
   const savedAddr = localStorage.getItem("shopzen_address");
-  const [address, setAddress] = useState<Address>(
-    savedAddr ? JSON.parse(savedAddr) : { type: "home", name: user?.name || "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "" }
+  const [address, setAddress] = useState<ShippingAddress>(
+    savedAddr
+      ? JSON.parse(savedAddr)
+      : { name: user?.name || "", phone: "", line1: "", line2: "", city: "", state: "", pincode: "" }
   );
   const [payment, setPayment] = useState("Cash on Delivery");
 
-  const discount   = Math.round(totalPrice * 0.2);
+  const discount   = totalPrice > 500 ? Math.round(totalPrice * 0.2) : 0;
   const finalTotal = totalPrice - discount;
 
   const addrValid = address.name && address.phone && address.line1 && address.city && address.state && address.pincode;
@@ -93,8 +90,9 @@ export default function Checkout() {
           {steps.map((s, i) => (
             <div key={s} className="flex items-center flex-1 last:flex-initial">
               <div className="flex flex-col items-center">
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold
-                  ${i < step ? "bg-green-500 text-white" : i === step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                  i < step ? "bg-green-500 text-white" : i === step ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                }`}>
                   {i < step ? <Check className="h-4 w-4" /> : i + 1}
                 </div>
                 <span className={`text-xs mt-1 ${i === step ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
@@ -111,14 +109,6 @@ export default function Checkout() {
             {step === 0 && (
               <Card className="p-6 space-y-4">
                 <h3 className="font-display text-lg font-semibold">Delivery Address</h3>
-                <div className="flex gap-2">
-                  {addressTypes.map(({ value, label, icon: Icon }) => (
-                    <Button key={value} variant={address.type === value ? "default" : "outline"} size="sm"
-                      onClick={() => setAddress({ ...address, type: value as any })}>
-                      <Icon className="h-3 w-3 mr-1" /> {label}
-                    </Button>
-                  ))}
-                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1"><Label>Full Name *</Label><Input value={address.name} onChange={(e) => setAddress({ ...address, name: e.target.value })} /></div>
                   <div className="space-y-1"><Label>Phone *</Label><Input value={address.phone} onChange={(e) => setAddress({ ...address, phone: e.target.value })} /></div>
@@ -139,14 +129,16 @@ export default function Checkout() {
                 <div className="space-y-3">
                   {paymentMethods.map(({ value, icon: Icon }) => (
                     <label key={value}
-                      className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors
-                        ${payment === value ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
+                      className={`flex items-center gap-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                        payment === value ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                      }`}>
                       <input type="radio" name="payment" checked={payment === value}
                         onChange={() => setPayment(value)} className="sr-only" />
                       <Icon className="h-5 w-5 text-muted-foreground" />
                       <span className="font-medium text-sm">{value}</span>
-                      <div className={`ml-auto h-4 w-4 rounded-full border-2
-                        ${payment === value ? "border-primary bg-primary" : "border-muted-foreground"}`} />
+                      <div className={`ml-auto h-4 w-4 rounded-full border-2 ${
+                        payment === value ? "border-primary bg-primary" : "border-muted-foreground"
+                      }`} />
                     </label>
                   ))}
                 </div>
@@ -167,17 +159,20 @@ export default function Checkout() {
                   <p className="mt-1 text-xs">Payment: <strong>{payment}</strong></p>
                 </div>
                 <div className="space-y-3">
-                  {items.map((item) => (
-                    <div key={item.product_id} className="flex items-center gap-3">
-                      <img src={item.image || `https://picsum.photos/seed/${item.product_id}/48/48`}
-                        className="h-12 w-12 rounded object-cover" alt="" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium line-clamp-1">{item.title}</p>
-                        <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                  {items.map((item) => {
+                    const itemName = item.name || item.title || "Item";
+                    return (
+                      <div key={item.product_id} className="flex items-center gap-3">
+                        <img src={item.image || `https://picsum.photos/seed/${item.product_id}/48/48`}
+                          className="h-12 w-12 rounded object-cover" alt="" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium line-clamp-1">{itemName}</p>
+                          <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                        </div>
+                        <p className="text-sm font-bold">₹{(item.price * item.quantity).toLocaleString()}</p>
                       </div>
-                      <p className="text-sm font-bold">₹{(item.price * item.quantity).toLocaleString()}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="flex gap-3">
                   <Button variant="outline" onClick={() => setStep(1)}>← Back</Button>
@@ -195,7 +190,7 @@ export default function Checkout() {
             <div className="space-y-2 text-sm mb-4">
               {items.map((item) => (
                 <div key={item.product_id} className="flex justify-between">
-                  <span className="text-muted-foreground line-clamp-1 flex-1 mr-2">{item.title} ×{item.quantity}</span>
+                  <span className="text-muted-foreground line-clamp-1 flex-1 mr-2">{item.name || item.title} ×{item.quantity}</span>
                   <span>₹{(item.price * item.quantity).toLocaleString()}</span>
                 </div>
               ))}

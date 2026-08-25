@@ -1,68 +1,39 @@
-from flask import Blueprint, jsonify, request
-from bson import ObjectId
+from flask import Blueprint, request
+from middleware.auth import admin_required
+from services.order_service import OrderService
+from utils.db import get_db
+from models.user_model import canonical_user
+from utils.response import success_response, error_response
 
-admin = Blueprint('admin', __name__)
-mongo = None
+admin = Blueprint("admin", __name__)
 
-
-def init_admin(mongo_instance):
-    global mongo
-    mongo = mongo_instance
-
-
-# ── GET ALL USERS ──────────────────────────────────────
-@admin.route('/admin/users', methods=['GET'])
+@admin.route("/admin/users", methods=["GET"])
+@admin_required()
 def get_all_users():
-    users = list(mongo.db.users.find({}, {"password": 0}))
-    for u in users:
-        u["_id"] = str(u["_id"])
-        u["order_count"] = mongo.db.orders.count_documents(
-            {"user_id": u["_id"]}
-        )
-    return jsonify(users)
+    db = get_db()
+    users_cursor = db.users.find({}, {"password": 0})
+    users = []
+    for u in users_cursor:
+        c_user = canonical_user(u)
+        c_user["order_count"] = db.orders.count_documents({"user_id": c_user["id"]})
+        users.append(c_user)
+    return success_response(data=users)
 
-
-# ── GET ALL ORDERS WITH CUSTOMER INFO ─────────────────
-@admin.route('/admin/orders', methods=['GET'])
+@admin.route("/admin/orders", methods=["GET"])
+@admin_required()
 def get_all_orders():
-    orders = list(mongo.db.orders.find())
-    for o in orders:
-        o["_id"] = str(o["_id"])
-        if "user_id" in o:
-            try:
-                user = mongo.db.users.find_one(
-                    {"_id": ObjectId(o["user_id"])},
-                    {"name": 1, "email": 1}
-                )
-                if user:
-                    o["user_name"]  = user.get("name", "")
-                    o["user_email"] = user.get("email", "")
-            except Exception:
-                pass
-    return jsonify(orders)
+    orders = OrderService.get_all_orders()
+    return success_response(data=orders)
 
-
-# ── ADD PRODUCT ────────────────────────────────────────
-@admin.route('/products', methods=['POST'])
-def add_product():
-    data = request.json
-    result = mongo.db.products.insert_one(data)
-    return jsonify({"_id": str(result.inserted_id), "message": "Product added"})
-
-
-# ── UPDATE PRODUCT ─────────────────────────────────────
-@admin.route('/products/<id>', methods=['PUT'])
-def update_product(id):
-    data = request.json
-    mongo.db.products.update_one(
-        {"_id": ObjectId(id)},
-        {"$set": data}
-    )
-    return jsonify({"message": "Product updated"})
-
-
-# ── DELETE PRODUCT ─────────────────────────────────────
-@admin.route('/products/<id>', methods=['DELETE'])
-def delete_product(id):
-    mongo.db.products.delete_one({"_id": ObjectId(id)})
-    return jsonify({"message": "Product deleted"})
+@admin.route("/admin/orders/<id>", methods=["PUT"])
+@admin_required()
+def update_order_status(id):
+    data = request.json or {}
+    status = data.get("status")
+    if not status:
+        return error_response(code="VALIDATION_ERROR", message="Status is required", status_code=400)
+    
+    res = OrderService.update_order_status(id, status)
+    if "error" in res:
+        return error_response(code=res["code"], message=res["error"], status_code=res["status"])
+    return success_response(data=res, message="Order status updated")
