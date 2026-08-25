@@ -9,10 +9,13 @@ class Database:
     @classmethod
     def get_db(cls):
         if cls._db is None:
-            mongo_uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/shopzen")
+            mongo_uri = os.environ.get("MONGODB_URI")
             db_name = os.environ.get("MONGODB_DATABASE", "shopzen")
             
-            logger.info(f"Connecting to MongoDB database: {db_name}")
+            if not mongo_uri:
+                raise ValueError("MONGODB_URI environment variable is missing. Please set your MongoDB Atlas connection string.")
+
+            logger.info(f"Connecting to MongoDB Atlas database: {db_name}")
             cls._client = MongoClient(mongo_uri)
             cls._db = cls._client[db_name]
             
