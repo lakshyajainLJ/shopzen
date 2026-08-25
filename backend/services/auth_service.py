@@ -6,6 +6,32 @@ from utils.db import get_db
 from models.user_model import canonical_user
 from utils.logger import logger
 
+def safe_hash_password(password: str) -> str:
+    if not isinstance(password, str):
+        password = str(password)
+    try:
+        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    except TypeError:
+        hashed = bcrypt.hashpw(password, bcrypt.gensalt())
+        
+    if isinstance(hashed, bytes):
+        return hashed.decode("utf-8")
+    return str(hashed)
+
+def safe_check_password(password: str, stored_hash) -> bool:
+    if not isinstance(password, str):
+        password = str(password)
+        
+    if isinstance(stored_hash, str):
+        hash_bytes = stored_hash.encode("utf-8")
+    else:
+        hash_bytes = stored_hash
+        
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hash_bytes)
+    except TypeError:
+        return bcrypt.checkpw(password, hash_bytes)
+
 class AuthService:
     @staticmethod
     def register_user(name, email, password):
@@ -16,7 +42,7 @@ class AuthService:
             if db.users.find_one({"email": email}):
                 return {"error": "User with this email already exists", "code": "USER_EXISTS", "status": 409}
             
-            hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            hashed_pw = safe_hash_password(password)
             
             user_doc = {
                 "name": name,
@@ -59,11 +85,8 @@ class AuthService:
                 logger.warning(f"Failed login attempt for non-existent email: {email}")
                 return {"error": "Invalid email or password", "code": "INVALID_CREDENTIALS", "status": 401}
                 
-            stored_pw = user["password"]
-            if isinstance(stored_pw, str):
-                stored_pw = stored_pw.encode("utf-8")
-                
-            if not bcrypt.checkpw(password.encode("utf-8"), stored_pw):
+            stored_pw = user.get("password", "")
+            if not safe_check_password(password, stored_pw):
                 logger.warning(f"Failed login attempt for email: {email} (Invalid password)")
                 return {"error": "Invalid email or password", "code": "INVALID_CREDENTIALS", "status": 401}
                 

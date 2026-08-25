@@ -186,6 +186,8 @@ PRODUCTS_SEED = [
     }
 ]
 
+from services.auth_service import safe_hash_password
+
 def seed_database():
     db = get_db()
     
@@ -199,12 +201,12 @@ def seed_database():
             {"$set": p},
             upsert=True
         )
-    logger.info(f"✅ Seeding complete: {len(PRODUCTS_SEED)} products inserted/updated in MongoDB.")
+    logger.info(f"Seeding complete: {len(PRODUCTS_SEED)} products inserted/updated in MongoDB.")
 
     # 2. Seed Default Admin User if not exists
     admin_email = "admin@shopzen.com"
     if not db.users.find_one({"email": admin_email}):
-        hashed_pw = bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        hashed_pw = safe_hash_password("admin123")
         db.users.insert_one({
             "name": "ShopZen Admin",
             "email": admin_email,
@@ -217,7 +219,7 @@ def seed_database():
     # 3. Seed Sample User if not exists
     user_email = "customer@shopzen.com"
     if not db.users.find_one({"email": user_email}):
-        hashed_pw = bcrypt.hashpw("password123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        hashed_pw = safe_hash_password("password123")
         db.users.insert_one({
             "name": "Demo Customer",
             "email": user_email,
